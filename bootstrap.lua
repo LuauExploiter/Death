@@ -18,6 +18,11 @@ local MODULE_URLS = {
 	["src/Shared/Runtime/Http.lua"] = BASE .. "src/Shared/Runtime/Http.lua",
 	["src/Shared/Runtime/Util.lua"] = BASE .. "src/Shared/Runtime/Util.lua",
 
+	["src/Shared/Schemas/Manifest.lua"] = BASE .. "src/Shared/Schemas/Manifest.lua",
+	["src/Shared/Schemas/AnimationData.lua"] = BASE .. "src/Shared/Schemas/AnimationData.lua",
+	["src/Shared/Schemas/VFXData.lua"] = BASE .. "src/Shared/Schemas/VFXData.lua",
+	["src/Shared/Schemas/CameraData.lua"] = BASE .. "src/Shared/Schemas/CameraData.lua",
+
 	["src/GameAdapters/Universal.lua"] = BASE .. "src/GameAdapters/Universal.lua",
 
 	["src/Emotes/Death/Manifest.lua"] = BASE .. "src/Emotes/Death/Manifest.lua",
@@ -34,27 +39,29 @@ local MODULE_URLS = {
 local moduleCache = {}
 local nodeByPath = {}
 
-local function makeNode(name, path, parent, isModule)
-	local node = {
-		Name = name,
-		__path = path,
-		__parent = parent,
-		__children = {},
-		__isModule = isModule or false,
-	}
-	nodeByPath[path] = node
-	return node
-end
+local methods = {}
 
-local function addChild(parent, child)
-	parent.__children[child.Name] = child
-end
+local NodeMT = {
+	__index = function(self, key)
+		local method = methods[key]
+		if method ~= nil then
+			return method
+		end
 
-local function FindFirstChild(self, name)
+		local child = rawget(self, "__children")
+		if child and child[key] ~= nil then
+			return child[key]
+		end
+
+		return rawget(self, key)
+	end,
+}
+
+function methods:FindFirstChild(name)
 	return self.__children[name]
 end
 
-local function WaitForChild(self, name)
+function methods:WaitForChild(name)
 	local child = self.__children[name]
 	if child then
 		return child
@@ -62,7 +69,15 @@ local function WaitForChild(self, name)
 	error(("FakeInstance %s missing child %s"):format(self.__path, tostring(name)))
 end
 
-local function IsA(self, className)
+function methods:GetChildren()
+	local out = {}
+	for _, child in pairs(self.__children) do
+		table.insert(out, child)
+	end
+	return out
+end
+
+function methods:IsA(className)
 	if className == "ModuleScript" then
 		return self.__isModule
 	end
@@ -72,15 +87,26 @@ local function IsA(self, className)
 	return false
 end
 
-local function attachMethods(node)
-	node.Parent = node.__parent
-	node.FindFirstChild = FindFirstChild
-	node.WaitForChild = WaitForChild
-	node.IsA = IsA
+local function makeNode(name, path, parent, isModule)
+	local node = setmetatable({
+		Name = name,
+		Parent = parent,
+		__path = path,
+		__parent = parent,
+		__children = {},
+		__isModule = isModule or false,
+	}, NodeMT)
+
+	nodeByPath[path] = node
 	return node
 end
 
-local root = attachMethods(makeNode("root", "", nil, false))
+local root = makeNode("root", "", nil, false)
+
+local function addChild(parent, child)
+	parent.__children[child.Name] = child
+	child.Parent = parent
+end
 
 local function ensureFolder(path)
 	if path == "" then
@@ -98,7 +124,7 @@ local function ensureFolder(path)
 	end
 
 	local parent = ensureFolder(parentPath)
-	local folder = attachMethods(makeNode(name, path, parent, false))
+	local folder = makeNode(name, path, parent, false)
 	addChild(parent, folder)
 	return folder
 end
@@ -107,7 +133,7 @@ local function addModule(path)
 	local parentPath, fileName = path:match("^(.*)/([^/]+)%.lua$")
 	local parent = ensureFolder(parentPath)
 	local name = fileName
-	local moduleNode = attachMethods(makeNode(name, path, parent, true))
+	local moduleNode = makeNode(name, path, parent, true)
 	addChild(parent, moduleNode)
 	return moduleNode
 end
@@ -152,9 +178,7 @@ local function customRequire(target)
 	return realRequire(target)
 end
 
-local src = root:WaitForChild("src")
-local loaderNode = src:WaitForChild("Loader")
-local Loader = customRequire(loaderNode)
+local Loader = customRequire(root.src.Loader)
 
 local LocalPlayer = Players.LocalPlayer
 local currentSession

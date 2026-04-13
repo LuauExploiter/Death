@@ -1,3 +1,5 @@
+local Root = script.Parent.Parent
+local AnimationAsset = require(Root:WaitForChild("assets"):WaitForChild("animations"):WaitForChild("death"))
 local Shared = script.Parent:WaitForChild("Shared")
 local EmotesFolder = script.Parent:WaitForChild("Emotes")
 local DeathFolder = EmotesFolder:WaitForChild("Death")

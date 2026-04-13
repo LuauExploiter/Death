@@ -1,5 +1,6 @@
 local ContextActionService = game:GetService("ContextActionService")
 local UserInputService = game:GetService("UserInputService")
+local Players = game:GetService("Players")
 
 local Mobile = require(script.Parent.Mobile)
 
@@ -33,25 +34,42 @@ local MOVE_KEYS = {
 local function beginJumpSuppress(context)
 	local root = context.Root
 	local humanoid = context.Humanoid
+
+	if not root or not root.Parent or not humanoid or not humanoid.Parent then
+		return
+	end
+
 	local startPos = root.Position
 	local oldAnchored = root.Anchored
+	local originalJumpPower = context.OriginalJumpPower or humanoid.JumpPower
+	local originalJumpHeight = context.OriginalJumpHeight or humanoid.JumpHeight
 
 	humanoid.Jump = false
+
 	pcall(function()
 		humanoid:SetStateEnabled(Enum.HumanoidStateType.Jumping, false)
+	end)
+
+	pcall(function()
 		humanoid.JumpPower = 0
+	end)
+
+	pcall(function()
 		humanoid.JumpHeight = 0
 	end)
 
-	local threadObj = task.spawn(function()
-		root.Anchored = true
+	task.spawn(function()
+		if root and root.Parent then
+			root.Anchored = true
+		end
 
 		for _ = 1, 2 do
-			if not root.Parent then
+			if not root or not root.Parent or not humanoid or not humanoid.Parent then
 				break
 			end
 
 			humanoid.Jump = false
+
 			pcall(function()
 				humanoid:ChangeState(Enum.HumanoidStateType.Running)
 			end)
@@ -67,20 +85,46 @@ local function beginJumpSuppress(context)
 
 		if root and root.Parent then
 			root.Anchored = oldAnchored
+			local pos = root.Position
+			root.CFrame = CFrame.new(pos.X, startPos.Y, pos.Z) * (root.CFrame - root.Position)
 		end
 
-		pcall(function()
-			humanoid:SetStateEnabled(Enum.HumanoidStateType.Jumping, true)
-		end)
-	end)
+		if humanoid and humanoid.Parent then
+			pcall(function()
+				humanoid.JumpPower = originalJumpPower
+			end)
 
-	context:trackThread(threadObj)
+			pcall(function()
+				humanoid.JumpHeight = originalJumpHeight
+			end)
+
+			pcall(function()
+				humanoid:SetStateEnabled(Enum.HumanoidStateType.Jumping, true)
+			end)
+
+			pcall(function()
+				humanoid.PlatformStand = false
+			end)
+
+			pcall(function()
+				humanoid.AutoRotate = context.OriginalAutoRotate
+			end)
+
+			pcall(function()
+				humanoid.Jump = false
+			end)
+
+			pcall(function()
+				humanoid:ChangeState(Enum.HumanoidStateType.Running)
+			end)
+		end
+	end)
 end
 
 function InputRuntime.bind(session, adapter)
 	local context = session.Context
 	local manifest = session.Manifest
-	local playerGui = game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui")
+	local playerGui = Players.LocalPlayer:WaitForChild("PlayerGui")
 	local blockedButtonsState = nil
 
 	if manifest.BlockMoves then
@@ -97,10 +141,12 @@ function InputRuntime.bind(session, adapter)
 			if not session.Playing then
 				return Enum.ContextActionResult.Pass
 			end
+
 			if inputState == Enum.UserInputState.Begin then
 				beginJumpSuppress(context)
 				stop("jump")
 			end
+
 			return Enum.ContextActionResult.Sink
 		end,
 		false,
@@ -115,9 +161,11 @@ function InputRuntime.bind(session, adapter)
 			if not session.Playing or not manifest.BlockMoves then
 				return Enum.ContextActionResult.Pass
 			end
+
 			if inputState == Enum.UserInputState.Begin then
 				return Enum.ContextActionResult.Sink
 			end
+
 			return Enum.ContextActionResult.Pass
 		end,
 		false,
@@ -153,6 +201,7 @@ function InputRuntime.bind(session, adapter)
 			stop("dashchild")
 			return
 		end
+
 		if table.find(adapter.M1Children or {}, child.Name) then
 			stop("m1child")
 			return

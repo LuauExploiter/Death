@@ -27,11 +27,20 @@ local Loader = {}
 local cachedBadWolf
 local cachedBadWolfAttempted = false
 
-local cachedTopbar
-local cachedTopbarAttempted = false
-
 local cachedHotbar
 local cachedHotbarAttempted = false
+
+local cachedBar
+local cachedBarAttempted = false
+
+local cachedEmotes
+local cachedEmotesAttempted = false
+
+local cachedIcon
+local cachedIconAttempted = false
+
+local cachedNewIcon
+local cachedNewIconAttempted = false
 
 local function resolveBadWolfModule()
 	local root = script.Parent.Parent
@@ -87,19 +96,6 @@ local function preloadBadWolf()
 end
 
 local function preloadGui()
-	if not cachedTopbarAttempted then
-		cachedTopbarAttempted = true
-		local moduleScript = resolveGuiModule("EmotesTopbar")
-		if moduleScript then
-			local ok, result = pcall(require, moduleScript)
-			if ok then
-				cachedTopbar = result
-			else
-				warn("[Death] EmotesTopbar preload failed:", result)
-			end
-		end
-	end
-
 	if not cachedHotbarAttempted then
 		cachedHotbarAttempted = true
 		local moduleScript = resolveGuiModule("Hotbar")
@@ -109,6 +105,54 @@ local function preloadGui()
 				cachedHotbar = result
 			else
 				warn("[Death] Hotbar preload failed:", result)
+			end
+		end
+	end
+
+	if not cachedBarAttempted then
+		cachedBarAttempted = true
+		local moduleScript = resolveGuiModule("Bar")
+		if moduleScript then
+			local ok, result = pcall(require, moduleScript)
+			if ok then
+				cachedBar = result
+			else
+				warn("[Death] Bar preload failed:", result)
+			end
+		end
+	end
+
+	if not cachedEmotesAttempted then
+		cachedEmotesAttempted = true
+		local moduleScript = resolveGuiModule("Emotes")
+		if moduleScript then
+			local ok, result = pcall(require, moduleScript)
+			if ok then
+				cachedEmotes = result
+			else
+				warn("[Death] Emotes preload failed:", result)
+			end
+		end
+	end
+
+	if not cachedIconAttempted then
+		cachedIconAttempted = true
+		local moduleScript = resolveGuiModule("Icon")
+		if moduleScript then
+			local ok, result = pcall(require, moduleScript)
+			if ok then
+				cachedIcon = result
+			end
+		end
+	end
+
+	if not cachedNewIconAttempted then
+		cachedNewIconAttempted = true
+		local moduleScript = resolveGuiModule("NewIcon")
+		if moduleScript then
+			local ok, result = pcall(require, moduleScript)
+			if ok then
+				cachedNewIcon = result
 			end
 		end
 	end
@@ -173,15 +217,33 @@ function Loader.play(character)
 		end
 	end
 
-	if cachedTopbar then
-		pcall(function()
-			gui:addTopbar(cachedTopbar)
-		end)
-	end
-
 	if cachedHotbar then
 		pcall(function()
 			gui:addHotbar(cachedHotbar)
+		end)
+	end
+
+	if cachedBar then
+		pcall(function()
+			gui:addBar(cachedBar)
+		end)
+	end
+
+	if cachedEmotes then
+		pcall(function()
+			gui:addEmotes(cachedEmotes)
+		end)
+	end
+
+	if cachedIcon then
+		pcall(function()
+			gui:addIcon(cachedIcon)
+		end)
+	end
+
+	if cachedNewIcon then
+		pcall(function()
+			gui:addNewIcon(cachedNewIcon)
 		end)
 	end
 

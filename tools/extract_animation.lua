@@ -1,4 +1,3 @@
-
 local function extract(source)
 	return {
 		Id = source.Id or source.AnimationId,

@@ -150,10 +150,40 @@ function CharacterRuntime:cleanup()
 	end
 	table.clear(self.Objects)
 
+	for _, desc in ipairs(self.Character:GetDescendants()) do
+		if desc:GetAttribute("EmoteProperty") then
+			Util.safeDestroy(desc)
+		end
+	end
+
+	local bodyGyro = self.Root:FindFirstChild("BODYGYRO")
+	if bodyGyro then
+		Util.safeDestroy(bodyGyro)
+	end
+
+	local slowed = self.Character:FindFirstChild("Slowed")
+	if slowed then
+		Util.safeDestroy(slowed)
+	end
+
+	local doingEmote = self.Character:FindFirstChild("DoingEmote")
+	if doingEmote then
+		Util.safeDestroy(doingEmote)
+	end
+
+	local hideWeapon = self.Character:FindFirstChild("HideWeapon")
+	if hideWeapon then
+		Util.safeDestroy(hideWeapon)
+	end
+
 	self.WalkSpeed = nil
 
 	pcall(function()
 		self.Root.Anchored = false
+	end)
+
+	pcall(function()
+		self.Root.AssemblyLinearVelocity = Vector3.new(self.Root.AssemblyLinearVelocity.X, 0, self.Root.AssemblyLinearVelocity.Z)
 	end)
 
 	pcall(function()
@@ -174,6 +204,10 @@ function CharacterRuntime:cleanup()
 
 	pcall(function()
 		self.Humanoid:SetStateEnabled(Enum.HumanoidStateType.Jumping, true)
+	end)
+
+	pcall(function()
+		self.Humanoid.PlatformStand = false
 	end)
 
 	pcall(function()

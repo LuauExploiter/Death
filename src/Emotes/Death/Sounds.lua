@@ -4,7 +4,7 @@ return {
 		SoundId = "rbxassetid://125713401851477",
 		SourceFile = "assets/audio/death_scythe_walk.mp3",
 		LocalRuntimePath = "Death/audio.mp3",
-		DownloadUrl = "https://raw.githubusercontent.com/LuauExploiter/Death/refs/heads/main/scythe%20walk.mp3",
+		DownloadUrl = "https://raw.githubusercontent.com/LuauExploiter/Death/refs/heads/main/assets/audio/death_scythe_walk.mp3",
 		StartTime = 0,
 		Looped = true,
 		Volume = 2,

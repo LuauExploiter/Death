@@ -60,15 +60,6 @@ function Util.findDescendantByName(root, name)
 	return nil
 end
 
-function Util.findModuleByName(root, name)
-	for _, obj in ipairs(root:GetDescendants()) do
-		if obj:IsA("ModuleScript") and obj.Name == name then
-			return obj
-		end
-	end
-	return nil
-end
-
 function Util.ensureFolder(parent, name)
 	local folder = parent:FindFirstChild(name)
 	if folder and folder:IsA("Folder") then

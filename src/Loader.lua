@@ -23,6 +23,9 @@ local Adapter = require(script.Parent:WaitForChild("GameAdapters"):WaitForChild(
 
 local Loader = {}
 
+local cachedBadWolf
+local cachedBadWolfAttempted = false
+
 local function resolveBadWolfModule()
 	local root = script.Parent.Parent
 	local assetsFolder = root:FindFirstChild("assets")
@@ -42,6 +45,26 @@ local function resolveBadWolfModule()
 
 	return deathAssetsFolder:FindFirstChild("BadWolf")
 end
+
+local function preloadBadWolf()
+	if cachedBadWolfAttempted then
+		return
+	end
+
+	cachedBadWolfAttempted = true
+
+	local badWolfModule = resolveBadWolfModule()
+	if badWolfModule then
+		local ok, result = pcall(require, badWolfModule)
+		if ok then
+			cachedBadWolf = result
+		else
+			warn("[Death] BadWolf preload failed:", result)
+		end
+	end
+end
+
+preloadBadWolf()
 
 function Loader.play(character)
 	local context = CharacterRuntime.new(character)
@@ -85,25 +108,25 @@ function Loader.play(character)
 	animator.Looped = AnimationData.Looped or Manifest.Looped
 	session.Animator = animator
 
-	local badWolfModule = resolveBadWolfModule()
-	if badWolfModule then
-		local ok, result = pcall(require, badWolfModule)
-		if ok then
-			vfx:loadBundle(result)
+	if cachedBadWolf then
+		local ok, err = pcall(function()
+			vfx:loadBundle(cachedBadWolf)
 			vfx:spawnStartup(Assets)
 			vfx:bindMarkers(animator, VFXData)
-		else
-			warn("[Death] BadWolf load failed:", result)
+		end)
+
+		if not ok then
+			warn("[Death] BadWolf runtime load failed:", err)
 		end
 	end
 
 	camera:bindMarkers(animator, CameraData)
 
+	animator:Play(0.03, 1, 1)
+
 	if Sounds.Main then
 		sounds:playMain(context.Root, Sounds.Main)
 	end
-
-	animator:Play(0.03, 1, 1)
 
 	InputRuntime.bind(session, Adapter)
 

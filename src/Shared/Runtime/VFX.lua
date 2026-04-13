@@ -1,6 +1,5 @@
 local CollectionService = game:GetService("CollectionService")
 
-local Util = require(script.Parent.Util)
 local RigMap = require(script.Parent.RigMap)
 
 local VFXRuntime = {}
@@ -97,12 +96,11 @@ function VFXRuntime:attachClone(part, clone, wolf)
 		clone:SetAttribute("Wolf", true)
 	end
 
-	local parentTarget = part
-	if not parentTarget then
+	if not part then
 		return nil
 	end
 
-	clone.Parent = parentTarget
+	clone.Parent = part
 	CollectionService:AddTag(clone, "emotestuff" .. self.Context.Character.Name)
 	self.Context:trackObject(clone)
 

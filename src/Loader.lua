@@ -11,6 +11,7 @@ local VFXRuntime = require(Runtime:WaitForChild("VFX"))
 local CameraRuntime = require(Runtime:WaitForChild("Camera"))
 local Cleanup = require(Runtime:WaitForChild("Cleanup"))
 local InputRuntime = require(Runtime:WaitForChild("Input"))
+local GuiRuntime = require(Runtime:WaitForChild("Gui"))
 
 local Manifest = require(DeathFolder:WaitForChild("Manifest"))
 local AnimationData = require(DeathFolder:WaitForChild("AnimationData"))
@@ -25,6 +26,12 @@ local Loader = {}
 
 local cachedBadWolf
 local cachedBadWolfAttempted = false
+
+local cachedTopbar
+local cachedTopbarAttempted = false
+
+local cachedHotbar
+local cachedHotbarAttempted = false
 
 local function resolveBadWolfModule()
 	local root = script.Parent.Parent
@@ -46,6 +53,21 @@ local function resolveBadWolfModule()
 	return deathAssetsFolder:FindFirstChild("BadWolf")
 end
 
+local function resolveGuiModule(name)
+	local root = script.Parent.Parent
+	local assetsFolder = root:FindFirstChild("assets")
+	if not assetsFolder then
+		return nil
+	end
+
+	local guiFolder = assetsFolder:FindFirstChild("gui")
+	if not guiFolder then
+		return nil
+	end
+
+	return guiFolder:FindFirstChild(name)
+end
+
 local function preloadBadWolf()
 	if cachedBadWolfAttempted then
 		return
@@ -64,13 +86,43 @@ local function preloadBadWolf()
 	end
 end
 
+local function preloadGui()
+	if not cachedTopbarAttempted then
+		cachedTopbarAttempted = true
+		local moduleScript = resolveGuiModule("EmotesTopbar")
+		if moduleScript then
+			local ok, result = pcall(require, moduleScript)
+			if ok then
+				cachedTopbar = result
+			else
+				warn("[Death] EmotesTopbar preload failed:", result)
+			end
+		end
+	end
+
+	if not cachedHotbarAttempted then
+		cachedHotbarAttempted = true
+		local moduleScript = resolveGuiModule("Hotbar")
+		if moduleScript then
+			local ok, result = pcall(require, moduleScript)
+			if ok then
+				cachedHotbar = result
+			else
+				warn("[Death] Hotbar preload failed:", result)
+			end
+		end
+	end
+end
+
 preloadBadWolf()
+preloadGui()
 
 function Loader.play(character)
 	local context = CharacterRuntime.new(character)
 	local sounds = SoundRuntime.new()
 	local vfx = VFXRuntime.new(context)
 	local camera = CameraRuntime.new(context)
+	local gui = GuiRuntime.new(context)
 
 	local session = {
 		Playing = true,
@@ -79,6 +131,7 @@ function Loader.play(character)
 		Sounds = sounds,
 		VFX = vfx,
 		Camera = camera,
+		Gui = gui,
 		Animator = nil,
 	}
 
@@ -118,6 +171,18 @@ function Loader.play(character)
 		if not ok then
 			warn("[Death] BadWolf runtime load failed:", err)
 		end
+	end
+
+	if cachedTopbar then
+		pcall(function()
+			gui:addTopbar(cachedTopbar)
+		end)
+	end
+
+	if cachedHotbar then
+		pcall(function()
+			gui:addHotbar(cachedHotbar)
+		end)
 	end
 
 	camera:bindMarkers(animator, CameraData)

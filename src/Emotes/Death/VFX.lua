@@ -1,12 +1,27 @@
 return {
 	Startup = {
-		{ From = "BadWolf/HandleL", To = "Character/Left Arm" },
-		{ From = "BadWolf/HandleR", To = "Character/Right Arm" },
-		{ From = "BadWolf/Left", To = "Character/HumanoidRootPart" },
-		{ From = "BadWolf/Right", To = "Character/HumanoidRootPart" },
+		Handles = { "HandleL", "HandleR" },
+		Root = { "Left", "Right" },
 	},
-	Markers = {
-		clang = { Spawn = "Sparks2" },
-		spin = { Spawn = { "SpinL", "SpinR" } },
+
+	Keyframes = {
+		stop = {
+			Action = "DisableWolfChildren",
+		},
+
+		clang = {
+			Action = "EmitSparks2",
+			Multiplier = 2,
+		},
+
+		restart = {
+			Action = "EnableWolfChildren",
+		},
+
+		spin = {
+			Action = "SpawnSpin",
+			Parts = { "SpinL", "SpinR" },
+			UseEmitDuration = true,
+		},
 	},
 }

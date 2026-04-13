@@ -34,6 +34,11 @@ local function onCharacterAdded(character)
 	runForCharacter(character)
 end
 
+getgenv().DeathStart = function()
+	local character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+	onCharacterAdded(character)
+end
+
 if LocalPlayer.Character then
 	task.spawn(onCharacterAdded, LocalPlayer.Character)
 end

@@ -62,12 +62,10 @@ local function coerceEasingStyle(value)
 		if value.EnumType == Enum.EasingStyle then
 			return value
 		end
-
 		local name = tostring(value):match("([%w_]+)$")
 		if name == "Constant" then
 			name = "Linear"
 		end
-
 		return Enum.EasingStyle[name] or Enum.EasingStyle.Linear
 	end
 
@@ -76,7 +74,6 @@ local function coerceEasingStyle(value)
 		if name == "Constant" then
 			name = "Linear"
 		end
-
 		return Enum.EasingStyle[name] or Enum.EasingStyle.Linear
 	end
 
@@ -88,7 +85,6 @@ local function coerceEasingDirection(value)
 		if value.EnumType == Enum.EasingDirection then
 			return value
 		end
-
 		local name = tostring(value):match("([%w_]+)$")
 		return Enum.EasingDirection[name] or Enum.EasingDirection.InOut
 	end
@@ -101,7 +97,7 @@ local function coerceEasingDirection(value)
 	return Enum.EasingDirection.InOut
 end
 
-local function appendAll(target, source)
+local function appendArray(target, source)
 	for i = 1, #source do
 		target[#target + 1] = source[i]
 	end
@@ -136,7 +132,8 @@ function Animator.new(Character, AnimationResolvable)
 		_markerSignal = {},
 		_motorMap = nil,
 		_boneMap = nil,
-		_mapDirty = true,
+		_mapsDirty = true,
+		_activeTweens = {},
 	}, Animator)
 
 	local valueType = typeof(AnimationResolvable)
@@ -186,7 +183,7 @@ function Animator.new(Character, AnimationResolvable)
 	return self
 end
 
-function Animator:_rebuildMaps()
+function Animator:_refreshMaps()
 	self._motorMap = Utility:getMotorMap(self.Character, {
 		IgnoreIn = self.MotorIgnoreInList,
 		IgnoreList = self.MotorIgnoreList,
@@ -197,7 +194,26 @@ function Animator:_rebuildMaps()
 		IgnoreList = self.BoneIgnoreList,
 	})
 
-	self._mapDirty = false
+	self._mapsDirty = false
+end
+
+function Animator:_cancelTweenFor(obj)
+	local tween = self._activeTweens[obj]
+	if tween then
+		pcall(function()
+			tween:Cancel()
+		end)
+		self._activeTweens[obj] = nil
+	end
+end
+
+function Animator:_cancelAllTweens()
+	for obj, tween in pairs(self._activeTweens) do
+		pcall(function()
+			tween:Cancel()
+		end)
+		self._activeTweens[obj] = nil
+	end
 end
 
 function Animator:IgnoreMotor(inst)
@@ -208,7 +224,7 @@ function Animator:IgnoreMotor(inst)
 		error(format("invalid argument 1 to 'IgnoreMotor' (Motor6D expected, got %s)", inst.ClassName))
 	end
 	tinsert(self.MotorIgnoreList, inst)
-	self._mapDirty = true
+	self._mapsDirty = true
 end
 
 function Animator:IgnoreBone(inst)
@@ -219,7 +235,7 @@ function Animator:IgnoreBone(inst)
 		error(format("invalid argument 1 to 'IgnoreBone' (Bone expected, got %s)", inst.ClassName))
 	end
 	tinsert(self.BoneIgnoreList, inst)
-	self._mapDirty = true
+	self._mapsDirty = true
 end
 
 function Animator:IgnoreMotorIn(inst)
@@ -227,7 +243,7 @@ function Animator:IgnoreMotorIn(inst)
 		error(format("invalid argument 1 to 'IgnoreMotorIn' (Instance expected, got %s)", typeof(inst)))
 	end
 	tinsert(self.MotorIgnoreInList, inst)
-	self._mapDirty = true
+	self._mapsDirty = true
 end
 
 function Animator:IgnoreBoneIn(inst)
@@ -235,14 +251,35 @@ function Animator:IgnoreBoneIn(inst)
 		error(format("invalid argument 1 to 'IgnoreBoneIn' (Instance expected, got %s)", typeof(inst)))
 	end
 	tinsert(self.BoneIgnoreInList, inst)
-	self._mapDirty = true
+	self._mapsDirty = true
+end
+
+function Animator:_gatherTargets(parentName, poseName)
+	if self._mapsDirty or not self._motorMap or not self._boneMap then
+		self:_refreshMaps()
+	end
+
+	local combined = {}
+
+	local motorBucket = self._motorMap[parentName]
+	if motorBucket then
+		appendArray(combined, motorBucket[poseName] or {})
+	end
+
+	local boneBucket = self._boneMap[parentName]
+	if boneBucket then
+		appendArray(combined, boneBucket[poseName] or {})
+	end
+
+	return combined
 end
 
 function Animator:_playPose(pose, parent, fade)
 	if pose.Subpose then
 		local subPose = pose.Subpose
 		for count = 1, #subPose do
-			self:_playPose(subPose[count], pose, fade)
+			local sp = subPose[count]
+			self:_playPose(sp, pose, fade)
 		end
 	end
 
@@ -250,52 +287,47 @@ function Animator:_playPose(pose, parent, fade)
 		return
 	end
 
-	if self._mapDirty or not self._motorMap or not self._boneMap then
-		self:_rebuildMaps()
-	end
-
-	local motorMap = self._motorMap
-	local boneMap = self._boneMap
-
-	local targets = {}
-
-	local motorsForParent = motorMap[parent.Name]
-	if motorsForParent then
-		appendAll(targets, motorsForParent[pose.Name] or {})
-	end
-
-	local bonesForParent = boneMap[parent.Name]
-	if bonesForParent then
-		appendAll(targets, bonesForParent[pose.Name] or {})
-	end
-
+	local targets = self:_gatherTargets(parent.Name, pose.Name)
 	local actualFade = fade or 0
+
 	if actualFade ~= actualFade or actualFade == math.huge or actualFade == -math.huge then
 		actualFade = 0
 	end
+
 	if actualFade < 0 then
 		actualFade = 0
 	end
 
+	local style = coerceEasingStyle(pose.EasingStyle)
+	local direction = coerceEasingDirection(pose.EasingDirection)
+
 	local tweenInfo
-	if actualFade > 0 then
-		tweenInfo = TweenInfo.new(
-			actualFade,
-			coerceEasingStyle(pose.EasingStyle),
-			coerceEasingDirection(pose.EasingDirection)
-		)
+	if actualFade > 0.008 then
+		tweenInfo = TweenInfo.new(actualFade, style, direction)
 	end
 
-	local target = { Transform = pose.CFrame }
+	local target = {
+		Transform = pose.CFrame,
+	}
 
 	for count = 1, #targets do
 		local obj = targets[count]
+
 		if self == nil or self._stopped then
 			break
 		end
 
-		if actualFade > 0 then
-			TweenService:Create(obj, tweenInfo, target):Play()
+		self:_cancelTweenFor(obj)
+
+		if tweenInfo then
+			local tween = TweenService:Create(obj, tweenInfo, target)
+			self._activeTweens[obj] = tween
+			tween.Completed:Connect(function()
+				if self and self._activeTweens[obj] == tween then
+					self._activeTweens[obj] = nil
+				end
+			end)
+			tween:Play()
 		else
 			obj.Transform = pose.CFrame
 		end
@@ -316,7 +348,8 @@ function Animator:Play(fadeTime, weight, speed)
 
 	self.Speed = speed or self.Speed or 1
 
-	self:_rebuildMaps()
+	self:_refreshMaps()
+	self:_cancelAllTweens()
 
 	local deathConnection
 	local noParentConnection
@@ -371,7 +404,7 @@ function Animator:Play(fadeTime, weight, speed)
 			end
 
 			local f = self.AnimationData.Frames[i]
-			local t = f.Time / self.Speed
+			local t = (f.Time or 0) / self.Speed
 
 			if f.Name ~= "Keyframe" then
 				self.KeyframeReached:Fire(f.Name)
@@ -394,13 +427,14 @@ function Animator:Play(fadeTime, weight, speed)
 					local ft = fadeTime
 
 					if i ~= 1 then
-						local prev = self.AnimationData.Frames[i - 1]
-						ft = ((f.Time or 0) - (prev.Time or 0)) / self.Speed
+						local prevFrame = self.AnimationData.Frames[i - 1]
+						ft = ((f.Time or 0) - (prevFrame.Time or 0)) / self.Speed
 					end
 
 					if ft ~= ft or ft == math.huge or ft == -math.huge then
 						ft = 0
 					end
+
 					if ft < 0 then
 						ft = 0
 					end
@@ -425,6 +459,8 @@ function Animator:Play(fadeTime, weight, speed)
 			noParentConnection:Disconnect()
 			noParentConnection = nil
 		end
+
+		self:_cancelAllTweens()
 
 		if self.Looped and not self._stopped then
 			self.DidLoop:Fire()
@@ -480,6 +516,7 @@ end
 function Animator:Stop(fadeTime)
 	self._stopFadeTime = fadeTime or 0.100000001
 	self._stopped = true
+	self:_cancelAllTweens()
 end
 
 function Animator:Destroy()

@@ -1,3 +1,43 @@
+local function splitPath(path)
+	local out = {}
+	path = tostring(path or ""):gsub("\\", "/")
+	for part in string.gmatch(path, "[^/]+") do
+		table.insert(out, part)
+	end
+	return out
+end
+
+local function stripLua(name)
+	return (name:gsub("%.lua$", ""))
+end
+
+local function resolveRelativeModule(baseScript, relPath)
+	if typeof(relPath) == "Instance" then
+		return relPath
+	end
+
+	local current = baseScript.Parent
+	local parts = splitPath(relPath)
+
+	for _, part in ipairs(parts) do
+		if part == "." or part == "" then
+		elseif part == ".." then
+			current = current.Parent
+		else
+			current = current:WaitForChild(stripLua(part))
+		end
+	end
+
+	return current
+end
+
+local function customRequire(relPath)
+	local target = resolveRelativeModule(script, relPath)
+	return require(target)
+end
+
+local animatorRequire = customRequire
+local HttpRequire = customRequire
 local Utility = animatorRequire("Utility.lua")
 
 local tinsert, tsort = table.insert, table.sort

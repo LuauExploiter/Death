@@ -4231,7 +4231,7 @@ set(objects[74], "className", "Motor6D")
 set(objects[74], "numExpectedDirectChildren", 0)
 
 
-setParent(objects[1], game.ReplicatedStorage.Emotes)
+setParent(objects[1], game.ReplicatedStorage)
 setParent(objects[2], objects[1])
 setParent(objects[3], objects[2])
 setParent(objects[4], objects[2])

@@ -287,11 +287,25 @@ function Animator:_playPose(pose, parent, fade)
 		IgnoreList = self.BoneIgnoreList,
 	})
 
-	local TI = TweenInfo.new(
-		fade,
+	local effectiveFade = fade or 0
+if effectiveFade < 0.045 then
+	effectiveFade = 0
+end
+
+local TI
+if effectiveFade > 0 then
+	TI = TweenInfo.new(
+		effectiveFade,
 		coerceEasingStyle(pose.EasingStyle),
 		coerceEasingDirection(pose.EasingDirection)
 	)
+end
+
+if effectiveFade > 0 then
+	TweenService:Create(obj, TI, Target):Play()
+else
+	obj.Transform = pose.CFrame
+end
 
 	local Target = {
 		Transform = pose.CFrame,
@@ -316,11 +330,7 @@ function Animator:_playPose(pose, parent, fade)
 			break
 		end
 
-		if fade > 0 then
-			TweenService:Create(obj, TI, Target):Play()
-		else
-			obj.Transform = pose.CFrame
-		end
+		
 	end
 end
 

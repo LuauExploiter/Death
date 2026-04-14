@@ -1,5 +1,6 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local StarterGui = game:GetService("StarterGui")
 
 local Shared = script.Parent:WaitForChild("Shared")
 local EmotesFolder = script.Parent:WaitForChild("Emotes")
@@ -48,6 +49,42 @@ local persistentGui = GuiRuntime.new()
 local persistentGuiBuilt = false
 local cachedBadWolf
 local currentSession
+
+local function ensureCompatChild(parent, className, name)
+	local existing = parent:FindFirstChild(name)
+	if existing and existing:IsA(className) then
+		return existing
+	end
+	if existing then
+		existing:Destroy()
+	end
+	local obj = Instance.new(className)
+	obj.Name = name
+	obj.Parent = parent
+	return obj
+end
+
+local function ensureGuiCompatScaffold()
+	do
+		local hotbar = ensureCompatChild(StarterGui, "ScreenGui", "Hotbar")
+		hotbar.ResetOnSpawn = false
+		local backpack = ensureCompatChild(hotbar, "Frame", "Backpack")
+		backpack.BackgroundTransparency = 1
+		backpack.Size = UDim2.fromScale(1, 1)
+		ensureCompatChild(backpack, "LocalScript", "LocalScript")
+	end
+
+	do
+		local emotes = ensureCompatChild(StarterGui, "ScreenGui", "Emotes")
+		emotes.ResetOnSpawn = false
+		ensureCompatChild(emotes, "LocalScript", "LocalScript")
+	end
+
+	do
+		local bar = ensureCompatChild(StarterGui, "ScreenGui", "Bar")
+		bar.ResetOnSpawn = false
+	end
+end
 
 local function ensureCompatEmotesFolder()
 	local folder = ReplicatedStorage:FindFirstChild("Emotes")
@@ -152,14 +189,46 @@ local function ensureExactGui()
 
 	persistentGuiBuilt = true
 
-	local hotbarBuilt = HotbarModule and require(HotbarModule) or nil
-	local barBuilt = BarModule and require(BarModule) or nil
-	local emotesBuilt = EmotesModule and require(EmotesModule) or nil
+	ensureGuiCompatScaffold()
+
+	local hotbarBuilt = nil
+	local barBuilt = nil
+	local emotesBuilt = nil
+
+	if HotbarModule then
+		local ok, result = pcall(require, HotbarModule)
+		if ok then
+			hotbarBuilt = result
+		else
+			warn("[Death] Hotbar require failed:", result)
+		end
+	end
+
+	if BarModule then
+		local ok, result = pcall(require, BarModule)
+		if ok then
+			barBuilt = result
+		else
+			warn("[Death] Bar require failed:", result)
+		end
+	end
+
+	if EmotesModule then
+		local ok, result = pcall(require, EmotesModule)
+		if ok then
+			emotesBuilt = result
+		else
+			warn("[Death] Emotes require failed:", result)
+		end
+	end
 
 	persistentGui:addExactHotbar(hotbarBuilt, triggerDeath)
 	persistentGui:addExactBar(barBuilt)
 	local emotesGui = persistentGui:addExactEmotes(emotesBuilt, triggerDeath)
-	persistentGui:addTopbarEmotesIcon(emotesGui)
+
+	pcall(function()
+		persistentGui:addTopbarEmotesIcon(emotesGui)
+	end)
 end
 
 function Loader.play(character)

@@ -4,6 +4,45 @@ local StarterGui = game:GetService("StarterGui")
 local GuiRuntime = {}
 GuiRuntime.__index = GuiRuntime
 
+local function resolveBundle(moduleResult)
+	if typeof(moduleResult) == "Instance" then
+		return moduleResult:Clone()
+	end
+
+	if type(moduleResult) == "function" then
+		local built = moduleResult()
+		if typeof(built) == "Instance" then
+			return built
+		end
+	end
+
+	if type(moduleResult) == "table" then
+		if typeof(moduleResult.Root) == "Instance" then
+			return moduleResult.Root:Clone()
+		end
+		if type(moduleResult.Create) == "function" then
+			local built = moduleResult.Create()
+			if typeof(built) == "Instance" then
+				return built
+			end
+		end
+		if type(moduleResult.Build) == "function" then
+			local built = moduleResult.Build()
+			if typeof(built) == "Instance" then
+				return built
+			end
+		end
+		if type(moduleResult.New) == "function" then
+			local built = moduleResult.New()
+			if typeof(built) == "Instance" then
+				return built
+			end
+		end
+	end
+
+	return nil
+end
+
 local function disableEmbeddedScripts(root)
 	for _, desc in ipairs(root:GetDescendants()) do
 		if desc:IsA("LocalScript") or desc:IsA("Script") then
@@ -47,14 +86,6 @@ local function setSlotText(slot, index, name)
 	end
 end
 
-local function getTopLevelScreenGuiByName(name)
-	local gui = StarterGui:FindFirstChild(name)
-	if gui and gui:IsA("ScreenGui") then
-		return gui
-	end
-	return nil
-end
-
 function GuiRuntime.new()
 	local self = setmetatable({}, GuiRuntime)
 	self.PlayerGui = Players.LocalPlayer:WaitForChild("PlayerGui")
@@ -71,22 +102,36 @@ function GuiRuntime:_removePlayerGuiCopy(name)
 	end
 end
 
-function GuiRuntime:_ensureBuiltInStarter(name, serializerModuleResult)
-	local starterCopy = getTopLevelScreenGuiByName(name)
-	if starterCopy then
-		return starterCopy
+function GuiRuntime:_ensureStarterGui(name, serializerModuleResult)
+	local existing = StarterGui:FindFirstChild(name)
+	if existing and existing:IsA("ScreenGui") then
+		return existing
 	end
 
-	if typeof(serializerModuleResult) == "Instance" and serializerModuleResult:IsA("ScreenGui") then
-		serializerModuleResult.Parent = StarterGui
-		return serializerModuleResult
+	local built = resolveBundle(serializerModuleResult)
+	if not built then
+		return nil
 	end
 
-	return getTopLevelScreenGuiByName(name)
+	if not built:IsA("ScreenGui") then
+		local wrapper = Instance.new("ScreenGui")
+		wrapper.Name = name
+		wrapper.ResetOnSpawn = false
+		wrapper.IgnoreGuiInset = true
+		built.Parent = wrapper
+		built = wrapper
+	end
+
+	built.Name = name
+	built.ResetOnSpawn = false
+	disableEmbeddedScripts(built)
+	built.Parent = StarterGui
+
+	return built
 end
 
 function GuiRuntime:_cloneExactGui(name, serializerModuleResult)
-	local starterCopy = self:_ensureBuiltInStarter(name, serializerModuleResult)
+	local starterCopy = self:_ensureStarterGui(name, serializerModuleResult)
 	if not starterCopy then
 		return nil
 	end
@@ -116,6 +161,8 @@ function GuiRuntime:addExactHotbar(serializerModuleResult, onDeath)
 
 	if template and container then
 		local layout = container:FindFirstChildOfClass("UIListLayout")
+		local templateClone = template:Clone()
+
 		clearChildrenExceptLayouts(container)
 		if layout then
 			layout.Parent = container
@@ -124,7 +171,7 @@ function GuiRuntime:addExactHotbar(serializerModuleResult, onDeath)
 		local names = { "PLACEHOLDER", "PLACEHOLDER", "PLACEHOLDER", "Death" }
 
 		for i = 1, 4 do
-			local slot = template:Clone()
+			local slot = templateClone:Clone()
 			slot.Visible = true
 			slot.Parent = container
 			setSlotText(slot, i, names[i])
@@ -179,24 +226,28 @@ function GuiRuntime:addExactEmotes(serializerModuleResult, onDeath)
 
 	if template and list then
 		local layout = list:FindFirstChildOfClass("UIListLayout")
+		local templateClone = template:Clone()
+
 		clearChildrenExceptLayouts(list)
 		if layout then
 			layout.Parent = list
 		end
 
 		for i = 1, 12 do
-			local item = template:Clone()
+			local item = templateClone:Clone()
 			item.Visible = true
 			item.Parent = list
 
 			for _, d in ipairs(item:GetDescendants()) do
 				if d:IsA("TextLabel") then
-					if d.Text == "Griddy" or d.Text == "NEW" or d.Text == "2 Player" or d.Text == "1 Player" then
-						if d.Text == "2 Player" or d.Text == "1 Player" then
-							d.Text = "1 Player"
-						else
-							d.Text = "Death"
-						end
+					if d.Name == "EmoteName" then
+						d.Text = "Death"
+					elseif d.Name == "EmoteProperty" then
+						d.Text = "1 Player"
+					elseif d.Text == "Griddy" or d.Text == "NEW" then
+						d.Text = "Death"
+					elseif d.Text == "2 Player" or d.Text == "1 Player" then
+						d.Text = "1 Player"
 					end
 				elseif d:IsA("TextButton") and d.Name == "Button" then
 					d.MouseButton1Click:Connect(function()
@@ -217,19 +268,66 @@ end
 function GuiRuntime:addTopbarEmotesIcon(emotesGui)
 	if self.IconObject then
 		pcall(function()
-			self.IconObject:destroy()
+			if self.IconObject.destroy then
+				self.IconObject:destroy()
+			elseif self.IconObject.Destroy then
+				self.IconObject:Destroy()
+			end
 		end)
 		self.IconObject = nil
 	end
 
-	local topbarFolder = script.Parent.Parent.Parent:WaitForChild("Packages"):WaitForChild("TopbarPlus")
-	local Icon = require(topbarFolder:WaitForChild("Icon"))
+	local packages = script.Parent.Parent.Parent:WaitForChild("Packages")
+	local packageFolder = packages:FindFirstChild("NewIcon") or packages:FindFirstChild("Icon")
+	if not packageFolder then
+		return nil
+	end
+
+	local entryModule = packageFolder:FindFirstChild("NewIcon") or packageFolder:FindFirstChild("Icon")
+	if not entryModule then
+		return nil
+	end
+
+	local Icon = require(entryModule)
+	if not Icon or not Icon.new then
+		return nil
+	end
 
 	local icon = Icon.new()
-		:setName("DeathEmotes")
-		:setLabel("Emotes")
-		:align("Center")
-		:bindToggleItem(emotesGui)
+
+	pcall(function()
+		icon:setName("DeathEmotes")
+	end)
+
+	pcall(function()
+		icon:setLabel("Emotes")
+	end)
+
+	pcall(function()
+		icon:align("Center")
+	end)
+
+	if emotesGui then
+		local bound = false
+
+		pcall(function()
+			icon:bindToggleItem(emotesGui)
+			bound = true
+		end)
+
+		if not bound then
+			pcall(function()
+				icon.selected:Connect(function()
+					emotesGui.Enabled = true
+				end)
+			end)
+			pcall(function()
+				icon.deselected:Connect(function()
+					emotesGui.Enabled = false
+				end)
+			end)
+		end
+	end
 
 	self.IconObject = icon
 	return icon

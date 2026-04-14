@@ -294,12 +294,14 @@ function Loader.play(character)
 
 	InputRuntime.bind(session, Adapter)
 
-	context:trackConnection(animator.Stopped.Event:Connect(function()
+	if animator.Stopped and animator.Stopped.Connect then
+	context:trackConnection(animator.Stopped:Connect(function()
 		if Manifest.Infinite then
 			return
 		end
 		session:Stop("anim-stopped")
 	end))
+end
 
 	currentSession = session
 	return session

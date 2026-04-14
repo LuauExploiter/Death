@@ -332,7 +332,8 @@ function GuiRuntime:addTopbarEmotesIcon(emotesGui)
 	end
 
 	local packages = script.Parent.Parent.Parent:WaitForChild("Packages")
-	local packageFolder = packages:FindFirstChild("NewIcon") or packages:FindFirstChild("Icon")
+	local topbarPlus = packages:WaitForChild("TopbarPlus")
+	local packageFolder = topbarPlus:FindFirstChild("NewIcon") or topbarPlus:FindFirstChild("Icon")
 	if not packageFolder then
 		return nil
 	end

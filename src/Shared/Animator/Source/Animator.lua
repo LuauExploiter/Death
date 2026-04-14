@@ -104,6 +104,11 @@ local function appendArray(target, source)
 	return target
 end
 
+local function isSpinSensitiveJoint(parentName, poseName)
+	local s = (tostring(parentName) .. " " .. tostring(poseName)):lower()
+	return s:find("arm") or s:find("hand") or s:find("wrist")
+end
+
 function Animator.isAnimator(value)
 	return type(value) == "table" and getmetatable(value) == Animator
 end
@@ -143,7 +148,7 @@ function Animator.new(Character, AnimationResolvable)
 
 	if isAnimation or valueType == "string" or valueType == "number" then
 		local keyframeSequence = game:GetObjects(
-			"rbxassetid://" .. tostring(isAnimation and AnimationResolvable.AnimationId or AnimationResolvable)
+			"rbxassetid://" .. tostring(IsAnimation and AnimationResolvable.AnimationId or AnimationResolvable)
 		)[1]
 
 		if not keyframeSequence or keyframeSequence.ClassName ~= "KeyframeSequence" then
@@ -275,15 +280,14 @@ function Animator:_gatherTargets(parentName, poseName)
 end
 
 function Animator:_playPose(pose, parent, fade)
-	if pose.Subpose then
-		local subPose = pose.Subpose
-		for count = 1, #subPose do
-			local sp = subPose[count]
-			self:_playPose(sp, pose, fade)
-		end
-	end
-
 	if not parent then
+		if pose.Subpose then
+			local subPose = pose.Subpose
+			for count = 1, #subPose do
+				local sp = subPose[count]
+				self:_playPose(sp, pose, fade)
+			end
+		end
 		return
 	end
 
@@ -298,11 +302,21 @@ function Animator:_playPose(pose, parent, fade)
 		actualFade = 0
 	end
 
+	if isSpinSensitiveJoint(parent.Name, pose.Name) then
+		if actualFade < 0.028 then
+			actualFade = 0
+		end
+	else
+		if actualFade < 0.008 then
+			actualFade = 0
+		end
+	end
+
 	local style = coerceEasingStyle(pose.EasingStyle)
 	local direction = coerceEasingDirection(pose.EasingDirection)
 
 	local tweenInfo
-	if actualFade > 0.008 then
+	if actualFade > 0 then
 		tweenInfo = TweenInfo.new(actualFade, style, direction)
 	end
 
@@ -330,6 +344,14 @@ function Animator:_playPose(pose, parent, fade)
 			tween:Play()
 		else
 			obj.Transform = pose.CFrame
+		end
+	end
+
+	if pose.Subpose then
+		local subPose = pose.Subpose
+		for count = 1, #subPose do
+			local sp = subPose[count]
+			self:_playPose(sp, pose, fade)
 		end
 	end
 end

@@ -33,7 +33,8 @@ local animationsFolder = assetsFolder and assetsFolder:FindFirstChild("animation
 local guiFolder = assetsFolder and assetsFolder:FindFirstChild("gui")
 local vfxFolder = assetsFolder and assetsFolder:FindFirstChild("vfx")
 local deathAnimModule = animationsFolder and animationsFolder:FindFirstChild("death")
-local badWolfModule = vfxFolder and vfxFolder:FindFirstChild("death") and vfxFolder.death:FindFirstChild("BadWolf")
+local deathVfxFolder = vfxFolder and vfxFolder:FindFirstChild("death")
+local badWolfModule = deathVfxFolder and deathVfxFolder:FindFirstChild("BadWolf")
 
 local HotbarModule = guiFolder and guiFolder:FindFirstChild("Hotbar")
 local BarModule = guiFolder and guiFolder:FindFirstChild("Bar")
@@ -45,16 +46,52 @@ local Loader = {}
 
 local persistentGui = GuiRuntime.new()
 local persistentGuiBuilt = false
+local cachedBadWolf
+local currentSession
 
 local function ensureCompatEmotesFolder()
 	local folder = ReplicatedStorage:FindFirstChild("Emotes")
 	if folder then
 		return folder, false
 	end
+
 	folder = Instance.new("Folder")
 	folder.Name = "Emotes"
 	folder.Parent = ReplicatedStorage
 	return folder, true
+end
+
+local function requireDetachedBadWolf()
+	if cachedBadWolf ~= nil then
+		return cachedBadWolf
+	end
+
+	if not badWolfModule then
+		cachedBadWolf = false
+		return nil
+	end
+
+	local compatFolder, createdCompat = ensureCompatEmotesFolder()
+
+	local ok, result = pcall(require, badWolfModule)
+	if ok then
+		cachedBadWolf = result
+	else
+		warn("[Death] BadWolf preload failed:", result)
+		cachedBadWolf = false
+	end
+
+	if createdCompat and compatFolder and compatFolder.Parent then
+		pcall(function()
+			compatFolder:Destroy()
+		end)
+	end
+
+	if cachedBadWolf == false then
+		return nil
+	end
+
+	return cachedBadWolf
 end
 
 local function buildAnimationResolvable()
@@ -83,8 +120,6 @@ local function buildAnimationResolvable()
 	}
 end
 
-local currentSession
-
 local function triggerDeath()
 	local localPlayer = Players.LocalPlayer
 	if not localPlayer then
@@ -92,11 +127,13 @@ local function triggerDeath()
 	end
 
 	local character = localPlayer.Character or localPlayer.CharacterAdded:Wait()
+
 	if currentSession and currentSession.Stop then
 		pcall(function()
 			currentSession:Stop("ui-rerun")
 		end)
 	end
+
 	currentSession = Loader.play(character)
 end
 
@@ -104,6 +141,7 @@ local function ensureExactGui()
 	if persistentGuiBuilt then
 		return
 	end
+
 	persistentGuiBuilt = true
 
 	local hotbarBuilt = HotbarModule and require(HotbarModule) or nil
@@ -156,28 +194,17 @@ function Loader.play(character)
 	animator.Looped = animationResolvable.Looped or animationResolvable.Loop or Manifest.Looped
 	session.Animator = animator
 
-	local compatFolder, createdCompat = ensureCompatEmotesFolder()
-
-	if badWolfModule then
-		local ok, result = pcall(require, badWolfModule)
-		if ok then
-			local loadedOk, err = pcall(function()
-				vfx:loadBundle(result)
-				vfx:spawnStartup(Assets)
-				vfx:bindMarkers(animator, VFXData)
-			end)
-			if not loadedOk then
-				warn("[Death] BadWolf runtime load failed:", err)
-			end
-		else
-			warn("[Death] BadWolf preload failed:", result)
-		end
-	end
-
-	if createdCompat and compatFolder and compatFolder.Parent then
-		pcall(function()
-			compatFolder:Destroy()
+	local detachedBadWolf = requireDetachedBadWolf()
+	if detachedBadWolf then
+		local ok, err = pcall(function()
+			vfx:loadBundle(detachedBadWolf)
+			vfx:spawnStartup(Assets)
+			vfx:bindMarkers(animator, VFXData)
 		end)
+
+		if not ok then
+			warn("[Death] BadWolf runtime load failed:", err)
+		end
 	end
 
 	camera:bindMarkers(animator, CameraData)

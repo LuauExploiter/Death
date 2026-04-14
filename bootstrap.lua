@@ -1,17 +1,13 @@
 local Players = game:GetService("Players")
 
 local BASE = "https://raw.githubusercontent.com/LuauExploiter/Death/refs/heads/main/"
-local ANIMATOR_SOURCE_ROOT = "src/Shared/Animator/Source/"
 
 local MODULE_URLS = {
 	["src/Loader.lua"] = BASE .. "src/Loader.lua",
 
 	["src/Shared/Animator/Source/Main.lua"] = BASE .. "src/Shared/Animator/Source/Main.lua",
 	["src/Shared/Animator/Source/Animator.lua"] = BASE .. "src/Shared/Animator/Source/Animator.lua",
-	["src/Shared/Animator/Source/Parser.lua"] = BASE .. "src/Shared/Animator/Source/Parser.lua",
 	["src/Shared/Animator/Source/Utility.lua"] = BASE .. "src/Shared/Animator/Source/Utility.lua",
-	["src/Shared/Animator/Source/Nevermore/Signal.lua"] = BASE .. "src/Shared/Animator/Source/Nevermore/Signal.lua",
-	["src/Shared/Animator/Source/Nevermore/Maid.lua"] = BASE .. "src/Shared/Animator/Source/Nevermore/Maid.lua",
 
 	["src/Shared/Runtime/Character.lua"] = BASE .. "src/Shared/Runtime/Character.lua",
 	["src/Shared/Runtime/Camera.lua"] = BASE .. "src/Shared/Runtime/Camera.lua",
@@ -176,97 +172,8 @@ for path in pairs(MODULE_URLS) do
 end
 
 local realRequire = require
-local httpRequireCache = getgenv().httpRequireCache or {}
-getgenv().httpRequireCache = httpRequireCache
 
-local function normalizeModulePath(path)
-	path = tostring(path or ""):gsub("\\", "/")
-	path = path:gsub("^%./", "")
-	path = path:gsub("^/", "")
-	return path
-end
-
-local function resolveAnimatorModulePath(path)
-	path = normalizeModulePath(path)
-
-	if MODULE_URLS[path] then
-		return path
-	end
-
-	local sourcePath = ANIMATOR_SOURCE_ROOT .. path
-	if MODULE_URLS[sourcePath] then
-		return sourcePath
-	end
-
-	return nil
-end
-
-local function loadChunkFromUrl(url, chunkName, sharedEnv)
-	local source = game:HttpGet(url, true)
-	local chunk, err = loadstring(source, chunkName)
-	if not chunk then
-		error("Failed loading " .. tostring(chunkName) .. ": " .. tostring(err))
-	end
-	setfenv(chunk, sharedEnv)
-	return chunk()
-end
-
-local customRequire
-
-local function makeModuleEnv(target)
-	local env
-
-	local function HttpRequire(path, noCache)
-		path = tostring(path)
-
-		if path:sub(1, 8) == "https://" or path:sub(1, 7) == "http://" then
-			if not noCache and httpRequireCache[path] ~= nil then
-				return httpRequireCache[path]
-			end
-
-			local result = loadChunkFromUrl(path, "@" .. path, env)
-			httpRequireCache[path] = result
-			return result
-		end
-
-		local resolved = resolveAnimatorModulePath(path)
-		if resolved then
-			return customRequire(nodeByPath[resolved])
-		end
-
-		return realRequire(path)
-	end
-
-	local function animatorRequire(path)
-		local resolved = resolveAnimatorModulePath(path)
-		if not resolved then
-			error("animatorRequire could not resolve " .. tostring(path))
-		end
-		return customRequire(nodeByPath[resolved])
-	end
-
-	env = setmetatable({
-		script = target,
-		require = function(mod)
-			if type(mod) == "string" then
-				local resolved = resolveAnimatorModulePath(mod)
-				if resolved then
-					return customRequire(nodeByPath[resolved])
-				end
-			end
-			return customRequire(mod)
-		end,
-		HttpRequire = HttpRequire,
-		animatorRequire = animatorRequire,
-		httpRequireCache = httpRequireCache,
-	}, {
-		__index = getfenv(),
-	})
-
-	return env
-end
-
-customRequire = function(target)
+local function customRequire(target)
 	if type(target) == "table" and target.__path and target.__isModule then
 		if moduleCache[target.__path] ~= nil then
 			return moduleCache[target.__path]
@@ -283,7 +190,13 @@ customRequire = function(target)
 			error("Failed loading " .. target.__path .. ": " .. tostring(err))
 		end
 
-		local env = makeModuleEnv(target)
+		local env = setmetatable({
+			script = target,
+			require = customRequire,
+		}, {
+			__index = getfenv(),
+		})
+
 		setfenv(chunk, env)
 
 		local result = chunk()

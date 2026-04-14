@@ -91,7 +91,6 @@ local function ensureCompatEmotesFolder()
 	if folder then
 		return folder, false
 	end
-
 	folder = Instance.new("Folder")
 	folder.Name = "Emotes"
 	folder.Parent = ReplicatedStorage
@@ -114,7 +113,7 @@ local function requireDetachedBadWolf()
 	if ok then
 		cachedBadWolf = result
 	else
-		warn("[Death] BadWolf preload failed:", result)
+		warn("[Death] BadWolf require failed:", result)
 		cachedBadWolf = false
 	end
 
@@ -186,7 +185,6 @@ local function ensureExactGui()
 	if persistentGuiBuilt then
 		return
 	end
-
 	persistentGuiBuilt = true
 
 	ensureGuiCompatScaffold()
@@ -225,7 +223,6 @@ local function ensureExactGui()
 	persistentGui:addExactHotbar(hotbarBuilt, triggerDeath)
 	persistentGui:addExactBar(barBuilt)
 	local emotesGui = persistentGui:addExactEmotes(emotesBuilt, triggerDeath)
-
 	pcall(function()
 		persistentGui:addTopbarEmotesIcon(emotesGui)
 	end)
@@ -253,7 +250,6 @@ function Loader.play(character)
 		if not self.Playing then
 			return
 		end
-
 		self.Playing = false
 
 		if context._restoreMobileButtons then
@@ -295,13 +291,13 @@ function Loader.play(character)
 	InputRuntime.bind(session, Adapter)
 
 	if animator.Stopped and animator.Stopped.Connect then
-	context:trackConnection(animator.Stopped:Connect(function()
-		if Manifest.Infinite then
-			return
-		end
-		session:Stop("anim-stopped")
-	end))
-end
+		context:trackConnection(animator.Stopped:Connect(function()
+			if Manifest.Infinite then
+				return
+			end
+			session:Stop("anim-stopped")
+		end))
+	end
 
 	currentSession = session
 	return session
